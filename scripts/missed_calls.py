@@ -54,4 +54,4 @@ except Exception as e:
     print(f"Error accessing call history: {e}")
 finally:
     if conn:
-        conn.close()
+        conn.close()    
