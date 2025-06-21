@@ -17,6 +17,9 @@ token.pickle
 tomas_bot.log
 processed_messages.json
 
+# Whitelist files
+close_friends_whitelist.json
+
 # IDE
 .vscode/
 .idea/
