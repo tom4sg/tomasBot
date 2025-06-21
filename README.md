@@ -72,8 +72,3 @@ Create a Shortcut that:
 1. Detects DND status changes
 2. Sends POST to `http://your-ip:5001/webhook/dnd`
 3. Body: `{"dnd_enabled": true/false}`
-
-## Example Responses
-
-- **With Calendar**: "Tomas is at the gym until 7:30pm EST - try calling then! - TomasBot"
-- **No Event**: "Tomas is busy but will get back to you soon! - TomasBot"
