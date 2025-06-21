@@ -25,7 +25,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # Back to INFO level
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('tomas_bot.log'),
@@ -35,25 +35,26 @@ logging.basicConfig(
 
 class TomasBot:
     def __init__(self):
+        """Initialize TomasBot"""
+        self.app = Flask(__name__)
         self.dnd_enabled = False
+        self.whitelist = set()
         self.last_processed_calls = set()
         self.last_processed_texts = set()
-        self.calendar_service = None
-        self.app = Flask(__name__)
-        self.setup_routes()
         
-        # Load whitelist of phone numbers that should receive auto-responses
-        self.whitelist = self.load_whitelist()
-        
-        # Initialize Claude LLM
-        self.llm = self.init_claude_llm()
-        
-        # Initialize Google Calendar service
+        # Initialize services
+        self.llm = self.init_claude_llm()  # Store the LLM object
+        self.load_whitelist()
         self.init_calendar_service()
         
+        # Setup routes
+        self.setup_routes()
+        
         # Start monitoring thread
+        logging.info("Starting monitoring thread...")
         self.monitoring_thread = threading.Thread(target=self.monitor_communications, daemon=True)
         self.monitoring_thread.start()
+        logging.info("Monitoring thread started successfully")
     
     def init_claude_llm(self):
         """Initialize Claude LLM using LangChain"""
@@ -83,14 +84,14 @@ class TomasBot:
                     data = json.load(f)
                     whitelist = data.get('phone_numbers', [])
                     logging.info(f"Loaded {len(whitelist)} phone numbers from whitelist")
-                    return whitelist
+                    self.whitelist = set(whitelist)
+                    return  # Successfully loaded, don't create default
             except Exception as e:
                 logging.error(f"Error loading whitelist: {e}")
         
-        # Default empty whitelist
+        # Only create default if file doesn't exist or failed to load
         logging.warning("No whitelist found. Creating default whitelist file.")
         self.create_default_whitelist()
-        return []
     
     def create_default_whitelist(self):
         """Create a default whitelist file"""
@@ -146,7 +147,7 @@ class TomasBot:
         normalized_number = self.normalize_phone_number(phone_number)
         
         if normalized_number not in self.whitelist:
-            self.whitelist.append(normalized_number)
+            self.whitelist.add(normalized_number)
             self.save_whitelist()
             logging.info(f"Added {normalized_number} ({name}) to whitelist")
             return True
@@ -171,7 +172,7 @@ class TomasBot:
         """Save whitelist to file"""
         whitelist_file = 'close_friends_whitelist.json'
         data = {
-            "phone_numbers": self.whitelist,
+            "phone_numbers": list(self.whitelist),
             "description": "Phone numbers that should receive automated responses from TomasBot",
             "note": "Add phone numbers in international format (e.g., +1234567890)"
         }
@@ -288,10 +289,12 @@ Your responses should be:
 - Brief and conversational (1-2 sentences max)
 - Friendly and helpful
 - Include Tomas's current activity if available
-- Suggest when they should try calling again based on the end time of the event
-- End with "- TomasBot"
+- Use the EXACT end time provided from the calendar event - do not change or estimate the time
+- Suggest when they should try calling again based on the exact end time
+- ALWAYS end your response with a period (.)
+- Do NOT include "- TomasBot" in your response - this will be added automatically
 
-If Tomas has a calendar event, mention what he's doing and when he'll be available.
+If Tomas has a calendar event, mention what he's doing and when he'll be available using the exact end time provided.
 If no calendar event is available, simply say he's busy and will get back to them soon.
 
 Keep it formal and professional."""
@@ -300,18 +303,23 @@ Keep it formal and professional."""
                 # Format event details for Claude
                 end_time = event_info['end_time']
                 if end_time.tzinfo:
-                    end_time = end_time.astimezone(timezone(timedelta(hours=-5)))  # EST
+                    # Convert to local timezone (handles DST automatically)
+                    import time
+                    local_tz = time.tzname[time.daylight]
+                    end_time = end_time.astimezone()
                 
-                time_str = end_time.strftime("%I:%M%p EST")
+                time_str = end_time.strftime("%I:%M%p %Z")  # Use %Z for timezone abbreviation
                 location = event_info.get('location', '')
                 
+                logging.info(f"Calendar event: {event_info['summary']}, End time: {time_str}, Location: {location}")
+                
                 user_message = f"""Tomas is currently at: {event_info['summary']}
-End time: {time_str}
+End time: {time_str} (use this EXACT time in your response)
 Location: {location if location else 'No location specified'}
 
-Generate a brief, friendly response letting someone know Tomas is busy and when to try calling again."""
+Generate a brief, friendly response letting someone know Tomas is busy and when to try calling again. IMPORTANT: Use the exact end time provided ({time_str}) - do not change or estimate the time. Make sure your response ends with a period."""
             else:
-                user_message = """Tomas doesn't have any calendar events right now. Generate a brief, friendly response letting someone know he's busy and will get back to them soon."""
+                user_message = """Tomas doesn't have any calendar events right now. Generate a brief, friendly response letting someone know he's busy and will get back to them soon. Make sure your response ends with a period."""
 
             # Call Claude using LangChain
             from langchain_core.messages import HumanMessage, SystemMessage
@@ -321,15 +329,18 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
                 HumanMessage(content=user_message)
             ]
             
-            response = self.llm.invoke(messages)
+            response = self.llm.invoke(messages, config={"timeout": 5})  # 5 second timeout
             generated_message = response.content.strip()
             
-            # Ensure it ends with "- TomasBot"
-            if not generated_message.endswith("- TomasBot"):
-                generated_message += " - TomasBot"
+            # Ensure it ends with a period
+            if not generated_message.endswith('.'):
+                generated_message += '.'
             
-            logging.info(f"Generated Claude response: {generated_message}")
-            return generated_message
+            # Add blank line and "- TomasBot"
+            formatted_message = f"{generated_message}\n\n- TomasBot"
+            
+            logging.info(f"Generated Claude response: {formatted_message}")
+            return formatted_message
             
         except Exception as e:
             logging.error(f"Error generating Claude response: {e}")
@@ -342,37 +353,58 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
             # Format end time
             end_time = event_info['end_time']
             if end_time.tzinfo:
-                end_time = end_time.astimezone(timezone(timedelta(hours=-5)))  # EST
+                # Convert to local timezone (handles DST automatically)
+                end_time = end_time.astimezone()
             
-            time_str = end_time.strftime("%I:%M%p EST")
+            time_str = end_time.strftime("%I:%M%p %Z")  # Use %Z for timezone abbreviation
             location = event_info.get('location', '')
             
             if location:
-                return f"Tomas is currently at {event_info['summary']} ({location}) until {time_str}... try calling him then! - TomasBot"
+                message = f"Tomas is currently at {event_info['summary']} ({location}) until {time_str}... try calling him then!"
             else:
-                return f"Tomas is currently at {event_info['summary']} until {time_str}... try calling him then! - TomasBot"
+                message = f"Tomas is currently at {event_info['summary']} until {time_str}... try calling him then!"
         else:
-            return "Tomas is currently unavailable and will get back to you soon! - TomasBot"
+            message = "Tomas is currently unavailable and will get back to you soon!"
+        
+        # Ensure it ends with a period and add blank line before "- TomasBot"
+        if not message.endswith('.'):
+            message += '.'
+        
+        return f"{message}\n\n- TomasBot"
     
     def send_imessage(self, recipient, message):
-        """Send an iMessage using AppleScript"""
-        escaped_message = message.replace('"', '\\"').replace("'", "\\'")
-        
-        applescript = f'''
-        tell application "Messages"
-            set targetService to 1st account whose service type = iMessage
-            set targetBuddy to participant "{recipient}" of targetService
-            send "{escaped_message}" to targetBuddy
-        end tell
-        '''
+        """Send an iMessage using AppleScript with temporary file to avoid syntax errors"""
+        import tempfile
+        import os
         
         try:
+            # Create a temporary file with the message content
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as temp_file:
+                temp_file.write(message)
+                temp_file_path = temp_file.name
+            
+            # Use AppleScript to read from the file and send the message
+            applescript = f'''
+            tell application "Messages"
+                set targetService to 1st account whose service type = iMessage
+                set targetBuddy to participant "{recipient}" of targetService
+                set messageText to (read POSIX file "{temp_file_path}" as «class utf8»)
+                send messageText to targetBuddy
+            end tell
+            '''
+            
             result = subprocess.run(
                 ['osascript', '-e', applescript], 
                 capture_output=True, 
                 text=True,
                 timeout=10
             )
+            
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass  # Ignore cleanup errors
             
             if result.returncode == 0:
                 logging.info(f"Auto-response sent to {recipient}: {message}")
@@ -383,6 +415,12 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
                 
         except Exception as e:
             logging.error(f"Error sending auto-response to {recipient}: {e}")
+            # Clean up temp file if it exists
+            try:
+                if 'temp_file_path' in locals():
+                    os.unlink(temp_file_path)
+            except:
+                pass
             return False
     
     def check_missed_calls(self):
@@ -392,36 +430,61 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
         
         try:
             db_path = os.path.expanduser("~/Library/Application Support/CallHistoryDB/CallHistory.storedata")
+            
+            if not os.path.exists(db_path):
+                logging.warning("Call database not found")
+                return
+            
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # Get recent missed calls
+            # Calculate timestamp for 15 minutes ago (Call database uses seconds since 2001)
+            now = datetime.now()
+            current_timestamp = int(now.timestamp() - 978307200)
+            fifteen_minutes_ago = int(now.timestamp() - 900 - 978307200)
+            
+            logging.debug(f"Current call timestamp: {current_timestamp}")
+            logging.debug(f"Querying for calls after timestamp: {fifteen_minutes_ago}")
+            
+            # Get recent missed calls from the last 15 minutes only
             cursor.execute("""
                 SELECT ZADDRESS, ZDATE, ZNAME
                 FROM ZCALLRECORD 
-                WHERE ZANSWERED = 0 AND ZORIGINATED = 0
+                WHERE ZANSWERED = 0 AND ZORIGINATED = 0 AND ZDATE > ?
                 ORDER BY ZDATE DESC
-                LIMIT 10
-            """)
+                LIMIT 5
+            """, (fifteen_minutes_ago,))
             
             missed_calls = cursor.fetchall()
             conn.close()
+            
+            if missed_calls:
+                logging.info(f"Found {len(missed_calls)} recent missed calls in database")
+            else:
+                logging.debug("No recent missed calls found")
             
             for call in missed_calls:
                 phone_number, timestamp, contact_name = call
                 
                 if timestamp:
                     call_time = datetime.fromtimestamp(timestamp + 978307200)
+                    time_diff = datetime.now() - call_time
                     
-                    # Check if this is a recent call (within last 5 minutes)
-                    if datetime.now() - call_time < timedelta(minutes=5):
+                    logging.info(f"Checking recent call: {contact_name or phone_number} at {call_time} ({time_diff.total_seconds():.0f}s ago)")
+                    
+                    # Check if this is a recent call (within last 30 seconds for faster response)
+                    if time_diff < timedelta(seconds=30):
                         call_id = f"{phone_number}_{timestamp}"
                         
                         if call_id not in self.last_processed_calls:
                             self.last_processed_calls.add(call_id)
                             
+                            logging.info(f"Processing recent missed call from: {contact_name or phone_number}")
+                            
                             # Check if phone number is whitelisted
                             if self.is_whitelisted(phone_number):
+                                logging.info(f"Phone number {phone_number} is whitelisted, sending response")
+                                
                                 # Get current calendar event
                                 event_info = self.get_current_calendar_event()
                                 message = self.format_response_message(event_info)
@@ -433,12 +496,16 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
                                 logging.info(f"Sent auto-response for missed call from whitelisted contact: {recipient}")
                             else:
                                 logging.info(f"Ignored missed call from non-whitelisted number: {phone_number}")
+                        else:
+                            logging.debug(f"Call {call_id} already processed")
+                    else:
+                        logging.debug(f"Call too old: {time_diff.total_seconds():.0f}s ago")
             
-            # Clean up old processed calls (older than 1 hour)
-            cutoff_time = datetime.now() - timedelta(hours=1)
+            # Clean up old processed calls (older than 30 minutes)
+            cutoff_time = datetime.now() - timedelta(minutes=30)
             self.last_processed_calls = {
                 call_id for call_id in self.last_processed_calls
-                if datetime.fromtimestamp(int(call_id.split('_')[1]) + 978307200) > cutoff_time
+                if datetime.fromtimestamp(float(call_id.split('_')[1]) + 978307200) > cutoff_time
             }
             
         except Exception as e:
@@ -446,15 +513,26 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
     
     def check_missed_texts(self):
         """Check for new unread texts"""
+        logging.debug("check_missed_texts() called")
         if not self.dnd_enabled:
+            logging.debug("DND not enabled, skipping text check")
             return
         
         try:
+            logging.debug("Connecting to Messages database...")
             db_path = os.path.expanduser("~/Library/Messages/chat.db")
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # Get recent unread messages
+            # Calculate timestamp for 15 minutes ago (original working setting)
+            now = datetime.now()
+            current_timestamp = int(now.timestamp() * 1000000000 - 978307200 * 1000000000)
+            fifteen_minutes_ago = int((now.timestamp() - 900) * 1000000000 - 978307200 * 1000000000)
+            
+            logging.debug(f"Current timestamp: {current_timestamp}")
+            logging.debug(f"Querying for texts after timestamp: {fifteen_minutes_ago}")
+            
+            # Original working query
             cursor.execute("""
                 SELECT 
                     m.text,
@@ -465,65 +543,147 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
                 LEFT JOIN handle h ON m.handle_id = h.ROWID
                 LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
                 LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-                WHERE m.is_from_me = 0 AND m.is_read = 0
+                WHERE m.is_from_me = 0 
+                AND m.is_read = 0 
+                AND m.date > ?
                 ORDER BY m.date DESC
                 LIMIT 10
-            """)
+            """, (fifteen_minutes_ago,))
             
             unread_texts = cursor.fetchall()
             conn.close()
             
+            if unread_texts:
+                logging.debug(f"Raw unread texts data: {unread_texts}")
+            else:
+                logging.debug("No recent unread texts found")
+            
+            logging.debug(f"About to process {len(unread_texts)} unread texts")
+            
+            # Track if we actually process any new messages
+            new_messages_processed = 0
+            
             for text in unread_texts:
                 message_text, timestamp, phone_number, chat_name = text
+                logging.debug(f"Processing text: text='{message_text}', timestamp={timestamp}, phone={phone_number}, chat={chat_name}")
                 
                 if timestamp:
                     # Convert Messages timestamp
                     text_time = datetime.fromtimestamp(timestamp / 1000000000 + 978307200)
                     
-                    # Check if this is a recent message (within last 5 minutes)
-                    if datetime.now() - text_time < timedelta(minutes=5):
-                        text_id = f"{phone_number}_{timestamp}"
-                        
-                        if text_id not in self.last_processed_texts:
-                            self.last_processed_texts.add(text_id)
+                    # Create unique ID for this message
+                    text_id = f"{phone_number}_{timestamp}"
+                    
+                    # Check if we've already processed this message
+                    if text_id in self.last_processed_texts:
+                        logging.debug(f"Message {text_id} already processed, skipping")
+                        continue
+                    
+                    # This is a new message we haven't processed before
+                    new_messages_processed += 1
+                    logging.info(f"Checking recent message: {chat_name or phone_number} at {text_time} ({(datetime.now() - text_time).total_seconds():.0f}s ago) - Text: '{message_text}'")
+                    
+                    # Original working time check - within last 1 minute
+                    if datetime.now() - text_time < timedelta(minutes=1):
+                        # Check if phone number is whitelisted
+                        if self.is_whitelisted(phone_number):
+                            logging.info(f"Phone number {phone_number} is whitelisted, sending response")
                             
-                            # Check if phone number is whitelisted
-                            if self.is_whitelisted(phone_number):
-                                # Get current calendar event
-                                event_info = self.get_current_calendar_event()
-                                message = self.format_response_message(event_info)
-                                
-                                # Send response
-                                recipient = chat_name if chat_name else phone_number
-                                self.send_imessage(recipient, message)
-                                
-                                logging.info(f"Sent auto-response for unread text from whitelisted contact: {recipient}")
+                            # Get current calendar event
+                            event_info = self.get_current_calendar_event()
+                            message = self.format_response_message(event_info)
+                            
+                            # Send response
+                            recipient = chat_name if chat_name else phone_number
+                            success = self.send_imessage(recipient, message)
+                            
+                            if success:
+                                # Only mark as processed if message was sent successfully
+                                self.last_processed_texts.add(text_id)
+                                logging.info(f"Sent auto-response for unread message from whitelisted contact: {recipient}")
                             else:
-                                logging.info(f"Ignored unread text from non-whitelisted number: {phone_number}")
+                                logging.error(f"Failed to send auto-response to {recipient}, will retry")
+                        else:
+                            # Mark as processed even if not whitelisted to avoid repeated logging
+                            self.last_processed_texts.add(text_id)
+                            logging.info(f"Ignored unread message from non-whitelisted number: {phone_number}")
+                    else:
+                        # Mark old messages as processed to prevent repeated logging
+                        self.last_processed_texts.add(text_id)
+                        logging.debug(f"Message too old: {(datetime.now() - text_time).total_seconds():.0f}s ago")
+                else:
+                    logging.debug(f"Skipping text with no timestamp: {text}")
             
-            # Clean up old processed texts (older than 1 hour)
-            cutoff_time = datetime.now() - timedelta(hours=1)
-            self.last_processed_texts = {
-                text_id for text_id in self.last_processed_texts
-                if datetime.fromtimestamp(int(text_id.split('_')[1]) / 1000000000 + 978307200) > cutoff_time
-            }
+            # Only log if we actually found and processed new messages
+            if new_messages_processed > 0:
+                logging.info(f"Found and processed {new_messages_processed} new unread texts")
+            
+            logging.debug(f"Finished processing {len(unread_texts)} unread texts")
+            
+            # Clean up old processed texts (older than 30 minutes)
+            # Only keep track of recent messages to prevent memory bloat
+            cutoff_time = datetime.now() - timedelta(minutes=30)
+            old_texts_to_remove = set()
+            
+            for text_id in self.last_processed_texts:
+                try:
+                    # Parse the timestamp from text_id format: "phone_number_timestamp"
+                    parts = text_id.split('_', 1)  # Split on first underscore only
+                    if len(parts) == 2:
+                        timestamp_str = parts[1]
+                        timestamp_ns = int(timestamp_str)
+                        message_time = datetime.fromtimestamp(timestamp_ns / 1000000000 + 978307200)
+                        
+                        if message_time < cutoff_time:
+                            old_texts_to_remove.add(text_id)
+                except (ValueError, IndexError) as e:
+                    # If we can't parse the text_id, remove it to prevent issues
+                    logging.debug(f"Removing malformed text_id: {text_id} (error: {e})")
+                    old_texts_to_remove.add(text_id)
+            
+            # Remove old texts
+            self.last_processed_texts -= old_texts_to_remove
+            if old_texts_to_remove:
+                logging.debug(f"Cleaned up {len(old_texts_to_remove)} old processed texts")
             
         except Exception as e:
             logging.error(f"Error checking missed texts: {e}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
     
     def monitor_communications(self):
         """Main monitoring loop"""
+        logging.info("Monitoring thread started")
+        cycle_count = 0
         while True:
             try:
-                if self.dnd_enabled:
-                    self.check_missed_calls()
-                    self.check_missed_texts()
+                cycle_count += 1
+                if cycle_count % 60 == 0:  # Log every 60 cycles (every minute)
+                    logging.info(f"Monitoring loop running - cycle {cycle_count}")
                 
-                time.sleep(30)  # Check every 30 seconds
+                if self.dnd_enabled:
+                    start_time = datetime.now()
+                    
+                    logging.debug("Checking missed calls...")
+                    self.check_missed_calls()
+                    
+                    logging.debug("Checking missed texts...")
+                    self.check_missed_texts()
+                    
+                    # Log performance metrics
+                    processing_time = (datetime.now() - start_time).total_seconds()
+                    if processing_time > 0.5:  # Log if processing takes more than 0.5 seconds
+                        logging.info(f"Monitoring cycle took {processing_time:.3f}s")
+                else:
+                    logging.debug("DND disabled, skipping monitoring")
+                
+                time.sleep(1)  # Check every 1 second (ultra-fast)
                 
             except Exception as e:
                 logging.error(f"Error in monitoring loop: {e}")
-                time.sleep(60)  # Wait longer on error
+                import traceback
+                logging.error(f"Traceback: {traceback.format_exc()}")
+                time.sleep(5)  # Wait longer on error
     
     def setup_routes(self):
         """Setup Flask routes"""
@@ -569,7 +729,7 @@ Generate a brief, friendly response letting someone know Tomas is busy and when 
         def get_whitelist():
             """Get current whitelist"""
             return jsonify({
-                'phone_numbers': self.whitelist,
+                'phone_numbers': list(self.whitelist),
                 'count': len(self.whitelist)
             })
         
