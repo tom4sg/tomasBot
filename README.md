@@ -4,11 +4,11 @@ TomasBot automatically responds to missed calls and texts when you're on Do Not 
 
 ## Features
 
-- **DND Detection**: Receives webhook notifications when Do Not Disturb mode changes
-- **Missed Call/Text Monitoring**: Detects and responds to missed communications
-- **Google Calendar Integration**: Uses current events to personalize responses
-- **Claude AI**: Generates natural, contextual responses
-- **Whitelist System**: Only responds to close friends
+- Receives webhook notifications when Do Not Disturb mode changes
+- Detects and responds to missed communications
+- Uses current events to personalize responses
+- Generates natural, contextual responses with Claude
+- Only responds to close friends on whitelist
 
 ## Quick Setup
 
