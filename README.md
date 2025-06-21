@@ -1,4 +1,4 @@
-# tomasBot - DND Text Responder
+# tomasBot - DND Responder
 
 TomasBot automatically responds to missed calls and texts when you're unavailable, using your Google Calendar and Claude AI to send personalized messages.
 
