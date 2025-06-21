@@ -72,3 +72,9 @@ Create a Shortcut that:
 1. Detects DND status changes
 2. Sends POST to `http://your-ip:5001/webhook/dnd`
 3. Body: `{"dnd_enabled": true/false}`
+
+## Demo
+
+https://github.com/user-attachments/assets/db824647-97c3-48c1-bcc5-efe17354c044
+
+
