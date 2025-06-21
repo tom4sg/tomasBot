@@ -1,6 +1,6 @@
 # tomasBot - DND Responder
 
-TomasBot automatically responds to missed calls and texts when you're unavailable, using your Google Calendar and Claude AI to send personalized messages.
+TomasBot automatically responds to missed calls and texts when you're on Do Not Disturb, calling Google Calendar API and Claude to send personalized messages to a specified contact list.
 
 ## Features
 
