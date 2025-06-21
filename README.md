@@ -1,4 +1,4 @@
-# tomasBot - text and call auto-Responder
+# tomasBot - text and call auto-responder
 
 TomasBot automatically responds to missed calls and texts when you're on Do Not Disturb, calling Google Calendar API and Claude to send personalized messages to a specified contact list.
 
