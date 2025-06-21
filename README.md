@@ -2,14 +2,6 @@
 
 TomasBot automatically responds to missed calls and texts when you're on Do Not Disturb, calling Google Calendar API and Claude to send personalized messages to a specified contact list.
 
-## Features
-
-- Receives webhook notifications when Do Not Disturb mode changes
-- Detects and responds to missed communications
-- Uses current events to personalize responses
-- Generates natural, contextual responses with Claude
-- Only responds to close friends on whitelist
-
 ## Quick Setup
 
 ### 1. Install Dependencies
@@ -40,12 +32,12 @@ python scripts/main.py
 
 ## How It Works
 
-1. **DND Webhook**: iPhone Shortcuts sends status changes to `/webhook/dnd`
-2. **Monitoring**: Bot checks call history and messages databases every second
-3. **Whitelist Check**: Only processes communications from whitelisted numbers
-4. **Calendar Check**: Looks up current Google Calendar event
-5. **AI Response**: Claude generates personalized response
-6. **Send**: Delivers message via iMessage
+1. iPhone Shortcuts sends Do Not Disturb status changes to `/webhook/dnd`
+2. Checks call history and messages databases every second
+3. Only proceeds with response to whitelisted numbers
+4. Looks up your current Google Calendar event
+5. Claude generates response with calendar info
+6. Delivers message via iMessage
 
 ## API Endpoints
 
