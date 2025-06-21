@@ -13,6 +13,10 @@ ENV/
 # Token files
 token.pickle
 
+# Generated files
+tomas_bot.log
+processed_messages.json
+
 # IDE
 .vscode/
 .idea/
