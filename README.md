@@ -18,12 +18,11 @@ ANTHROPIC_API_KEY=your_claude_api_key
 ```
 
 ### 3. Configure Whitelist
-Edit `close_friends_whitelist.json`:
-```json
-{
-  "phone_numbers": ["+1234567890", "+1987654321"]
-}
+Run the whitelist management tool:
+```bash
+python scripts/manage_whitelist.py
 ```
+This will open an interactive menu to view, add, or remove phone numbers from your whitelist.
 
 ### 4. Run
 ```bash
