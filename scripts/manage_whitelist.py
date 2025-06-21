@@ -56,18 +56,18 @@ def add_number():
     whitelist = load_whitelist()
     
     if normalized_number in whitelist:
-        print(f"❌ {normalized_number} is already in the whitelist")
+        print(f"{normalized_number} is already in the whitelist")
     else:
         whitelist.append(normalized_number)
         save_whitelist(whitelist)
-        print(f"✅ Added {normalized_number} ({name}) to whitelist")
+        print(f"Added {normalized_number} ({name}) to whitelist")
 
 def remove_number():
     """Remove a phone number from the whitelist"""
     whitelist = load_whitelist()
     
     if not whitelist:
-        print("❌ Whitelist is empty!")
+        print("Whitelist is empty!")
         return
     
     print("\nCurrent whitelist:")
@@ -79,21 +79,21 @@ def remove_number():
         if 0 <= choice < len(whitelist):
             removed_number = whitelist.pop(choice)
             save_whitelist(whitelist)
-            print(f"✅ Removed {removed_number} from whitelist")
+            print(f"Removed {removed_number} from whitelist")
         else:
-            print("❌ Invalid choice!")
+            print("Invalid choice!")
     except ValueError:
-        print("❌ Please enter a valid number!")
+        print("Please enter a valid number!")
 
 def view_whitelist():
     """View the current whitelist"""
     whitelist = load_whitelist()
     
     if not whitelist:
-        print("📋 Whitelist is empty")
+        print("Whitelist is empty")
         print("Add phone numbers to start receiving automated responses from TomasBot")
     else:
-        print(f"📋 Current whitelist ({len(whitelist)} contacts):")
+        print(f"Current whitelist ({len(whitelist)} contacts):")
         print("-" * 40)
         for i, number in enumerate(whitelist, 1):
             print(f"{i}. {number}")
@@ -103,7 +103,7 @@ def edit_whitelist():
     """Edit the whitelist directly in a text editor"""
     whitelist = load_whitelist()
     
-    print("📝 Opening whitelist file for editing...")
+    print("Opening whitelist file for editing...")
     print("Format: One phone number per line, international format (e.g., +1234567890)")
     
     # Create a temporary file with current numbers
@@ -132,10 +132,10 @@ def edit_whitelist():
                     new_numbers.append(normalized)
         
         save_whitelist(new_numbers)
-        print(f"✅ Updated whitelist with {len(new_numbers)} phone numbers")
+        print(f"Updated whitelist with {len(new_numbers)} phone numbers")
         
     except Exception as e:
-        print(f"❌ Error reading edited file: {e}")
+        print(f"Error reading edited file: {e}")
     
     # Clean up temp file
     if os.path.exists(temp_file):
@@ -145,7 +145,7 @@ def main():
     """Main menu"""
     while True:
         print("\n" + "="*50)
-        print("🤖 TomasBot Whitelist Manager")
+        print("TomasBot Whitelist Manager")
         print("="*50)
         print("1. View current whitelist")
         print("2. Add phone number")
@@ -165,10 +165,10 @@ def main():
         elif choice == '4':
             edit_whitelist()
         elif choice == '5':
-            print("👋 Goodbye!")
+            print("Goodbye!")
             break
         else:
-            print("❌ Invalid choice! Please enter 1-5")
+            print("Invalid choice! Please enter 1-5")
         
         input("\nPress Enter to continue...")
 
