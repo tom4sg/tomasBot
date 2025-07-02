@@ -1,0 +1,11 @@
+2025-07-01 21:26:48,735 - INFO - Scheduler started
+2025-07-01 21:26:48,735 - INFO - Scheduler started in background
+2025-07-01 21:27:35,425 - INFO - Scheduled message for +14256989141 at 2025-07-01 21:28:35.423152
+2025-07-01 21:27:45,608 - INFO - Scheduler stopped
+2025-07-01 21:28:12,603 - INFO - Scheduler started
+2025-07-01 21:28:12,603 - INFO - Scheduler started in background
+2025-07-01 21:28:33,441 - INFO - Scheduled message for +14256989141 at 2025-07-01 21:29:33.439221
+2025-07-01 21:28:42,604 - INFO - Sending scheduled message to +14256989141
+2025-07-01 21:28:45,651 - INFO - Scheduled message sent to +14256989141
+2025-07-01 21:28:45,652 - INFO - Successfully sent scheduled message to +14256989141
+2025-07-01 21:29:03,964 - INFO - Scheduler stopped
