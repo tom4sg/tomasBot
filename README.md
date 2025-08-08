@@ -66,6 +66,4 @@ Create a Shortcut that:
 
 ## Demo
 
-https://github.com/user-attachments/assets/871dcd90-10c1-44fa-ae72-c264a908b732
-
-
+https://github.com/user-attachments/assets/279f93ba-cfdd-47ec-b527-4b3c82917fb9
